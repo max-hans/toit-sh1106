@@ -3,11 +3,15 @@
 // found in the LICENSE file.
 
 /**
-Driver for the SSD1306 i2C OLED display.
-This is a 128x64 monochrome
-  display. On the Wemos Lolin board the I2C bus is connected to pin5 (SDA) and
-  pin4 (SCL), and the SSD1306 display is device 0x3c.  See
-  https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf for programming info.
+Driver for the SH1106 i2C OLED display.
+This is a 128x64 monochrome display, similar to SSD1306 but with different
+  memory addressing. On the Wemos Lolin board the I2C bus is connected to
+  pin5 (SDA) and pin4 (SCL), and the SH1106 display is device 0x3c.
+  
+Key differences from SSD1306:
+- Uses page-based addressing instead of column/page range commands
+- Requires 2-column offset for 128x64 displays (132-column internal RAM)
+- Does not support hardware scrolling commands
 */
 
 import binary
@@ -19,59 +23,46 @@ import pixel-display.two-color show *
 import pixel-display show *
 import spi
 
-SSD1306-SETMEMORYMODE_ ::= 0x20
-SSD1306-COLUMNADDR_ ::= 0x21
-SSD1306-PAGEADDR_ ::= 0x22
-SSD1306-DEACTIVATE-SCROLL_ ::= 0x2e
-SSD1306-SETSTARTLINE-0_ ::= 0x40
-SSD1306-SETCONTRAST_ ::= 0x81
-SSD1306-CHARGEPUMP_ ::= 0x8d
-SSD1306-SETREMAPMODE-0_ ::= 0xa0
-SSD1306-SETREMAPMODE-1_ ::= 0xa1
-SSD1306-SETVERTICALSCROLLAREA_ ::= 0xa3  // Next byte is number of fixed rows.  Next after that is number of scrolling rows.
-SSD1306-DISPLAYALLON-RESUME_ ::= 0xa4  // End all pixels on (use RAM for image).
-SSD1306-DISPLAYALLON_ ::= 0xa5         // All pixels on.
-SSD1306-NORMALDISPLAY_ ::= 0xa6
-SSD1306-INVERSEDISPLAY_ ::= 0xa7
-SSD1306-SETMULTIPLEX_ ::= 0xa8
-SSD1306-DISPLAYOFF_ ::= 0xae
-SSD1306-DISPLAYON_ ::= 0xaf
-SSD1306-COMSCANINC_ ::= 0xc0
-SSD1306-COMSCANDEC_ ::= 0xc8
-SSD1306-SETDISPLAYOFFSET_ ::= 0xd3
-SSD1306-SETDISPLAYCLOCKDIV_ ::= 0xd5
-SSD1306-SETPRECHARGE_ ::= 0xd9
-SSD1306-SETCOMPINS_ ::= 0xda
-SSD1306-SETVCOMDETECT_ ::= 0xdb
-SSD1306-NOP_ ::= 0xe3
+SH1106-SETMEMORYMODE_ ::= 0x20
+// SH1106 does not use 0x21 (COLUMNADDR) or 0x22 (PAGEADDR)
+// Instead it uses:
+// - 0xB0-0xB7 for page address (0xB0 | page_number)
+// - 0x00-0x0F for lower column address (0x00 | low_nibble)
+// - 0x10-0x1F for higher column address (0x10 | high_nibble)
+SH1106-SET-PAGE-ADDRESS-BASE_ ::= 0xB0
+SH1106-SET-LOWER-COLUMN-BASE_ ::= 0x00
+SH1106-SET-HIGHER-COLUMN-BASE_ ::= 0x10
+// SH1106 does not support hardware scrolling
+SH1106-SETSTARTLINE-0_ ::= 0x40
+SH1106-SETCONTRAST_ ::= 0x81
+SH1106-CHARGEPUMP_ ::= 0x8d
+SH1106-SETREMAPMODE-0_ ::= 0xa0
+SH1106-SETREMAPMODE-1_ ::= 0xa1
+SH1106-SETVERTICALSCROLLAREA_ ::= 0xa3  // Next byte is number of fixed rows.  Next after that is number of scrolling rows.
+SH1106-DISPLAYALLON-RESUME_ ::= 0xa4  // End all pixels on (use RAM for image).
+SH1106-DISPLAYALLON_ ::= 0xa5         // All pixels on.
+SH1106-NORMALDISPLAY_ ::= 0xa6
+SH1106-INVERSEDISPLAY_ ::= 0xa7
+SH1106-SETMULTIPLEX_ ::= 0xa8
+SH1106-DISPLAYOFF_ ::= 0xae
+SH1106-DISPLAYON_ ::= 0xaf
+SH1106-COMSCANINC_ ::= 0xc0
+SH1106-COMSCANDEC_ ::= 0xc8
+SH1106-SETDISPLAYOFFSET_ ::= 0xd3
+SH1106-SETDISPLAYCLOCKDIV_ ::= 0xd5
+SH1106-SETPRECHARGE_ ::= 0xd9
+SH1106-SETCOMPINS_ ::= 0xda
+SH1106-SETVCOMDETECT_ ::= 0xdb
+SH1106-NOP_ ::= 0xe3
 
 /**
-Deprecated. Use the $Ssd1306.i2c constructor.
+Black-and-white driver for an SH1106 connected I2C.
 */
-class I2cSSD1306 extends I2cSsd1306_:
-  constructor i2c/i2c.Device:
-    super i2c --height=64 --no-flip --inverse --layout=Ssd1306.LAYOUT-ALTERNATED
-
-/**
-Deprecated. Use the $Ssd1306.spi constructor.
-*/
-class SpiSSD1306 extends SpiSsd1306_:
-  constructor device/spi.Device --reset/gpio.Pin?=null:
-    super device --reset=reset --height=64 --no-flip --inverse --layout=Ssd1306.LAYOUT-ALTERNATED
-
-/**
-Black-and-white driver for an SSD1306 or SSD1309 connected I2C.
-*/
-class I2cSsd1306_ extends SSD1306:
+class I2cSh1106 extends Sh1106:
   i2c_ / i2c.Device
 
   constructor .i2c_ --reset/gpio.Pin?=null --height/int --flip/bool --inverse/bool --layout/int:
-    super.from-subclass_  // @no-warn
-        --reset=reset
-        --height=height
-        --flip=flip
-        --inverse=inverse
-        --layout=layout
+    super.from-subclass_ --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
 
   buffer-header-size_: return 1
 
@@ -84,18 +75,13 @@ class I2cSsd1306_ extends SSD1306:
     i2c_.write buffer
 
 /**
-Black-and-white driver for an SSD1306 or SSD1309 connected over SPI.
+Black-and-white driver for an SH1106 connected over SPI.
 */
-class SpiSsd1306_ extends SSD1306:
+class SpiSh1106 extends Sh1106:
   device_ / spi.Device
 
   constructor .device_ --reset/gpio.Pin?=null --height/int --flip/bool --inverse/bool --layout/int:
-    super.from-subclass_  // @no-warn
-        --reset=reset
-        --height=height
-        --flip=flip
-        --inverse=inverse
-        --layout=layout
+    super.from-subclass_ --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
 
   buffer-header-size_: return 0
 
@@ -106,46 +92,12 @@ class SpiSsd1306_ extends SSD1306:
     device_.transfer buffer --dc=1
 
 /**
-Deprecated. Use $Ssd1306 instead.
-*/
-abstract class SSD1306 extends Ssd1306:
-  /** Deprecated. Use $Ssd1306.I2C-ADDRESS instead. */
-  static I2C-ADDRESS ::= Ssd1306.I2C-ADDRESS
-  /** Deprecated. Use $Ssd1306.I2C-ADDRESS-ALT instead. */
-  static I2C-ADDRESS-ALT ::= Ssd1306.I2C-ADDRESS-ALT
-
-  /**
-  Deprecated. Use the $Ssd1306.i2c constructor instead.
-  */
-  constructor device/i2c.Device:
-    return I2cSsd1306_ device --reset=null --height=64 --no-flip --inverse --layout=Ssd1306.LAYOUT-ALTERNATED
-
-  /**
-  Deprecated. Use $Ssd1306.i2c instead.
-  */
-  constructor.i2c device/i2c.Device --reset/gpio.Pin?=null:
-    return I2cSsd1306_ device --reset=reset --height=64 --no-flip --inverse --layout=Ssd1306.LAYOUT-ALTERNATED
-
-  /**
-  Deprecated. Use $Ssd1306.spi instead.
-  */
-  constructor.spi device/spi.Device --reset/gpio.Pin?=null:
-    return SpiSsd1306_ device --reset=reset --height=64 --no-flip --inverse --layout=Ssd1306.LAYOUT-ALTERNATED
-
-  constructor.from-subclass_ --reset/gpio.Pin? --height/int --flip/bool --inverse/bool --layout/int:
-    super.from-subclass_ --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
-
-  abstract buffer-header-size_ -> int
-  abstract send-command-buffer_ buffer -> none
-  abstract send-data-buffer_ buffer -> none
-
-/**
-Black-and-white driver for an SSD1306 or SSD1309 connected over I2C or SPI.
+Black-and-white driver for an SH1106 connected over I2C or SPI.
 Intended to be used with the Pixel-Display package
-  at https://pkg.toit.io/package/pixel_display&url=github.com%2Ftoitware%2Ftoit-pixel-display&index=latest
+  at https://pkg.toit.io/package/github.com%2Ftoitware%2Ftoit-pixel-display@v2.11.0
 See https://docs.toit.io/language/sdk/display
 */
-abstract class Ssd1306 extends AbstractDriver:
+abstract class Sh1106 extends AbstractDriver:
   static I2C-ADDRESS ::= 0x3c
   static I2C-ADDRESS-ALT ::= 0x3d
 
@@ -191,13 +143,7 @@ abstract class Ssd1306 extends AbstractDriver:
   static LAYOUT-ALTERNATED-SWITCHED ::= 3
 
   /**
-  Deprecated. Use the $Ssd1306.i2c constructor instead.
-  */
-  constructor device/i2c.Device:
-    return Ssd1306.i2c device
-
-  /**
-  Constructs a driver for an SSD1306 or SSD1309 connected over I2C.
+  Constructs a driver for an SH1106 connected over I2C.
 
   The $reset pin is optional. If provided, it is used to reset the display.
   The $height parameter is the height of the display in pixels, and must be
@@ -205,7 +151,7 @@ abstract class Ssd1306 extends AbstractDriver:
   The $flip parameter controls whether the display is flipped vertically.
   The $inverse parameter controls whether the display is inverted. That is,
     whether a pixel value of 0 means "on" or "off".
-  The $layout parameter controls how the SSD1360 chip is physically connected
+  The $layout parameter controls how the SH1106 chip is physically connected
     to the rows of the display. Must be one of
     $LAYOUT-SEQUENTIAL, $LAYOUT-SEQUENTIAL-SWITCHED, $LAYOUT-ALTERNATED, or
     $LAYOUT-ALTERNATED-SWITCHED.
@@ -222,10 +168,10 @@ abstract class Ssd1306 extends AbstractDriver:
       --flip/bool=false
       --inverse/bool=false
       --layout/int=(height == 32 ? LAYOUT-SEQUENTIAL-SWITCHED : LAYOUT-ALTERNATED):
-    return I2cSsd1306_ device --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
+    return I2cSh1106 device --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
 
   /**
-  Variant of $Ssd1306.i2c that takes an SPI device instead of an I2C device.
+  Variant of $Sh1106.i2c that takes an SPI device instead of an I2C device.
   */
   constructor.spi device/spi.Device
       --reset/gpio.Pin?=null
@@ -233,7 +179,7 @@ abstract class Ssd1306 extends AbstractDriver:
       --flip/bool=false
       --inverse/bool=false
       --layout/int=(height == 32 ? LAYOUT-SEQUENTIAL-SWITCHED : LAYOUT-ALTERNATED):
-    return SpiSsd1306_ device --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
+    return SpiSh1106 device --reset=reset --height=height --flip=flip --inverse=inverse --layout=layout
 
   constructor.from-subclass_
       --reset/gpio.Pin?
@@ -268,32 +214,32 @@ abstract class Ssd1306 extends AbstractDriver:
   abstract send-data-buffer_ buffer -> none
 
   init_ --flip/bool --inverse/bool --layout/int:
-    command_ SSD1306-DISPLAYOFF_
-    command_ SSD1306-SETDISPLAYCLOCKDIV_ 0x80
-    command_ SSD1306-SETMULTIPLEX_ 0x3f
-    command_ SSD1306-SETDISPLAYOFFSET_ 0
-    command_ SSD1306-SETSTARTLINE-0_
-    command_ SSD1306-SETMEMORYMODE_ 0
-    command_ SSD1306-SETREMAPMODE-1_
+    command_ SH1106-DISPLAYOFF_
+    command_ SH1106-SETDISPLAYCLOCKDIV_ 0x80
+    command_ SH1106-SETMULTIPLEX_ 0x3f
+    command_ SH1106-SETDISPLAYOFFSET_ 0
+    command_ SH1106-SETSTARTLINE-0_
+    // SH1106 does not use SETMEMORYMODE - page addressing is default
+    command_ SH1106-SETREMAPMODE-1_
     if flip:
-      command_ SSD1306-COMSCANINC_
+      command_ SH1106-COMSCANINC_
     else:
-      command_ SSD1306-COMSCANDEC_
-    command_ SSD1306-SETCOMPINS_ ((layout << 4) | 0x02)
-    command_ SSD1306-SETCONTRAST_ 0xcf
-    command_ SSD1306-SETPRECHARGE_ 0xf1
-    command_ SSD1306-SETVCOMDETECT_ 0x30
-    command_ SSD1306-CHARGEPUMP_ 0x14
-    command_ SSD1306-DEACTIVATE-SCROLL_
-    command_ SSD1306-DISPLAYALLON-RESUME_
+      command_ SH1106-COMSCANDEC_
+    command_ SH1106-SETCOMPINS_ ((layout << 4) | 0x02)
+    command_ SH1106-SETCONTRAST_ 0xcf
+    command_ SH1106-SETPRECHARGE_ 0xf1
+    command_ SH1106-SETVCOMDETECT_ 0x30
+    command_ SH1106-CHARGEPUMP_ 0x14
+    // SH1106 does not support hardware scrolling - removed DEACTIVATE-SCROLL
+    command_ SH1106-DISPLAYALLON-RESUME_
     if inverse:
       // This driver inverts the meaning of "inverse".
       // Typically displays are oled where the inverse mode is
       // more common.
-      command_ SSD1306-NORMALDISPLAY_
+      command_ SH1106-NORMALDISPLAY_
     else:
-      command_ SSD1306-INVERSEDISPLAY_
-    command_ SSD1306-DISPLAYON_
+      command_ SH1106-INVERSEDISPLAY_
+    command_ SH1106-DISPLAYON_
 
   command_ byte:
     i := buffer-header-size_
@@ -317,23 +263,36 @@ abstract class Ssd1306 extends AbstractDriver:
     send-command-buffer_ buffer
 
   draw-two-color left/int top/int right/int bottom/int pixels/ByteArray -> none:
-    command_ SSD1306-COLUMNADDR_
-        left               // Column start.
-        right - 1          // Column end.
-    command_ SSD1306-PAGEADDR_
-        top >> 3           // Page start.
-        (bottom >> 3) - 1  // Page end.
+    // SH1106 requires a 2-column offset for 128x64 displays
+    // (132-column internal RAM, display starts at column 2)
+    COLUMN-OFFSET ::= 2
+    start-column := left + COLUMN-OFFSET
+    
+    // Convert Y coordinates to page numbers (8 rows per page)
+    start-page := top >> 3
+    end-page := (bottom >> 3) - 1
+    
+    // SH1106 uses page-based addressing - must be page-aligned
+    if (top & 0x07) != 0 or (bottom & 0x07) != 0:
+      throw "SH1106 driver requires page-aligned drawing (top and bottom must be multiples of 8)"
 
     patch-width := right - left
-
     line-buffer := buffer_[0..patch-width + buffer-header-size_]
 
     i := 0
-    for y := top; y < bottom; y += 8:
+    // SH1106 requires setting page and column address for each page
+    for page := start-page; page <= end-page; page++:
+      // 1. Set Page Address (0xB0 to 0xB7 for 64-line displays)
+      command_ (SH1106-SET-PAGE-ADDRESS-BASE_ | page)
+      
+      // 2. Set Column Address (split into lower and higher nibbles)
+      command_ (SH1106-SET-LOWER-COLUMN-BASE_ | (start-column & 0x0F))  // Lower 4 bits
+      command_ (SH1106-SET-HIGHER-COLUMN-BASE_ | (start-column >> 4))   // Upper 4 bits
+
+      // 3. Send the data for this page
       line-buffer.replace buffer-header-size_ pixels i i + patch-width
       i += patch-width
       send-data-buffer_ line-buffer
 
-/// I2C ID of an SSD1306 display.
-/// Deprecated. Use $Ssd1306.I2C-ADDRESS instead.
-SSD1306-ID ::= Ssd1306.I2C-ADDRESS
+/// I2C ID of an SH1106 display.
+SH1106-ID ::= Sh1106.I2C-ADDRESS

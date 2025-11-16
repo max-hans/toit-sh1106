@@ -4,7 +4,7 @@
 
 import gpio
 import i2c
-import ssd1306 show *
+import sh1106 show *
 import pixel-display show *
 
 get-display -> PixelDisplay:
@@ -22,13 +22,13 @@ get-display -> PixelDisplay:
     sleep --ms=50
 
   devices := bus.scan
-  if not devices.contains Ssd1306.I2C-ADDRESS: throw "No SSD1306 display found"
+  if not devices.contains Sh1106.I2C-ADDRESS: throw "No Sh1106 display found"
 
   // See the constructor for more options.
   // For example, smaller displays might need '--height=32'.
   // If the display is mirrored vertically, try '--flip'.
   // If black and white are swapped, try '--inverse'.
   // If the display looks weird, play with the '--layout' option.
-  driver := Ssd1306.i2c (bus.device Ssd1306.I2C-ADDRESS)
+  driver := Sh1106.i2c (bus.device Sh1106.I2C-ADDRESS)
 
   return PixelDisplay.two-color --inverted driver

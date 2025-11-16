@@ -8,5 +8,5 @@ dependencies:
   pixel_display:
     url: github.com/toitware/toit-pixel-display
     version: ^2.3.0
-  ssd1306:
+  sh1106:
     path: ..

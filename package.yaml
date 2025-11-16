@@ -1,5 +1,5 @@
-name: ssd1306
-description: Driver for 1-bit OLED displays.
+name: sh1106
+description: Driver for 1-bit OLED displays using the SH1106 driver
 environment:
   sdk: ^2.0.0-alpha.121
 dependencies:

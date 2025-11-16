@@ -1,9 +1,9 @@
-sdk: ^2.0.0-alpha.121
+sdk: ^2.0.0-alpha.146
 prefixes:
   font_tiny: pkg-font-tiny
   font_x11_adobe: pkg-font-x11-adobe
   pixel_display: toit-pixel-display
-  ssd1306: ..
+  sh1106: ..
 packages:
   ..:
     path: ..
@@ -22,8 +22,8 @@ packages:
   toit-pixel-display:
     url: github.com/toitware/toit-pixel-display
     name: pixel_display
-    version: 2.3.0
-    hash: 4a6f7c4c30152ec3c80b6cbe765133ce9015dab0
+    version: 2.11.0
+    hash: 59a4be9f0e6aa2321c6a032da44776f59af364b5
     prefixes:
       png-tools: toit-png-tools
   toit-png-tools:
